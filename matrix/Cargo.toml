@@ -14,6 +14,9 @@ assert_type_eq = { path = "../assert_type_eq" }
 typenum = "1.15.0"
 generic-array = "0.13.2"
 
+[dev-dependencies]
+criterion = "0.3"
+
 
 [profile.test]
 opt-level = 0
@@ -46,7 +49,11 @@ lto = false
 panic = 'unwind'
 incremental = true
 # codegen-units = 16  # Note: ignored because `incremental` is enabled.
-rpath = false
+# rpath = false
+
+[[bench]]
+name = "matrix"
+harness = false
 
 [profile.bench]
 opt-level = 3
