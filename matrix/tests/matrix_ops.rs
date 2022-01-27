@@ -2,7 +2,7 @@
 // use typenum::{Integer, Prod, UInt, UTerm, Unsigned, B1, U512};
 // use typenum::{Prod, Unsigned};
 // use typenum::{U0, U1, U2, U3, U4, U5, U6, U8};
-use typenum::{U1, U12, U2, U3, U4, U5};
+use typenum::{U1, U12, U2, U20, U25, U256, U3, U4, U5};
 
 // use rand::rngs::ThreadRng;
 // use rand_distr::{Distribution, Normal, Uniform};
@@ -16,12 +16,19 @@ use generic_array::arr;
 extern crate matrix;
 
 use matrix::Matrix;
+use std::thread;
 
 #[test]
 fn ops() {
+
+    // let a_1 = Matrix::<U256, U256>::new();
+    // println!("{:?}", a_1);
     let a = Matrix::<U2, U5>::new();
     let b = Matrix::<U2, U5>::fill(1.0);
     let c = Matrix::<U2, U5>::from_fn(|i| i as f32);
+    let c_t = c.transpose();
+
+    // println!("{:?}", c_t.dot(&c));
 
     let mut c1 = c.clone();
 
@@ -47,6 +54,10 @@ fn ops() {
 
     let x = Matrix::<U3, U4>::from_fn(|i| i as f32);
 
+
+    let w = Matrix::<U25, U20>::from_fn(|i| i as f32);
+    let w_t = w.transpose();
+
     let reshaped = x.reshape::<U12, U1>();
 
     assert_eq!(
@@ -54,6 +65,7 @@ fn ops() {
         Matrix {
             shape: (2, 5),
             size: 10,
+            dot_fast_partition:matrix::DOT_FAST_PARTITION,
             data: arr![f32; 0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0]
         }
     );
@@ -63,6 +75,7 @@ fn ops() {
         Matrix {
             shape: (12, 1),
             size: 12,
+            dot_fast_partition:matrix::DOT_FAST_PARTITION,
             data: arr![f32; 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0]
         }
     );
@@ -74,6 +87,7 @@ fn ops() {
         Matrix {
             shape: (2, 4),
             size: 8,
+            dot_fast_partition:matrix::DOT_FAST_PARTITION,
             data: arr![f32; 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
         }
     );
@@ -83,6 +97,7 @@ fn ops() {
         Matrix {
             shape: (2, 5),
             size: 10,
+            dot_fast_partition:matrix::DOT_FAST_PARTITION,
             data: arr![f32; 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         }
     );
@@ -112,6 +127,7 @@ fn ops() {
         Matrix {
             shape: (5, 2),
             size: 10,
+            dot_fast_partition:matrix::DOT_FAST_PARTITION,
             data: arr![f32; 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         }
     );
@@ -120,8 +136,19 @@ fn ops() {
         f.dot(&b),
         Matrix {
             shape: (5, 5),
-            size: 10,
+            size: 25,
+            dot_fast_partition:matrix::DOT_FAST_PARTITION,
             data: arr![f32;2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        }
+    );
+
+    assert_eq!(
+        c_t.dot(&c),
+        Matrix {
+            shape: (5, 5),
+            size: 25,
+            dot_fast_partition:matrix::DOT_FAST_PARTITION,
+            data: arr![f32;25.0, 30.0, 35.0, 40.0, 45.0, 30.0, 37.0, 44.0, 51.0, 58.0, 35.0, 44.0, 53.0, 62.0, 71.0, 40.0, 51.0, 62.0, 73.0, 84.0, 45.0, 58.0, 71.0, 84.0, 97.0]
         }
     );
 
@@ -130,6 +157,37 @@ fn ops() {
         Matrix {
             shape: (2, 2),
             size: 4,
+            dot_fast_partition:matrix::DOT_FAST_PARTITION,
+            data: arr![f32;5.0, 5.0, 5.0, 5.0]
+        }
+    );
+
+    assert_eq!(
+        f.dot_fast(&b),
+        Matrix {
+            shape: (5, 5),
+            size: 10,
+            dot_fast_partition:matrix::DOT_FAST_PARTITION,
+            data: arr![f32;2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        }
+    );
+
+    assert_eq!(
+        c_t.dot_fast(&c).data,
+        c_t.dot(&c).data
+    );
+
+    assert_eq!(
+        w_t.dot_fast(&w).data,
+        w_t.dot(&w).data
+    );
+
+    assert_eq!(
+        b.dot_fast(&f),
+        Matrix {
+            shape: (2, 2),
+            size: 4,
+            dot_fast_partition:matrix::DOT_FAST_PARTITION,
             data: arr![f32;5.0, 5.0, 5.0, 5.0]
         }
     );

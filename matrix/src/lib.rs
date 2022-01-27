@@ -21,6 +21,8 @@ use std::ops::{Add, Mul};
 use generic_array::sequence::GenericSequence;
 use generic_array::{ArrayLength, GenericArray};
 
+pub const DOT_FAST_PARTITION: usize = 16;
+
 #[derive(Debug, Clone)]
 pub struct Matrix<R, C>
 where
@@ -30,6 +32,7 @@ where
     Prod<C, R>: ArrayLength<f32>,
 {
     pub shape: (usize, usize),
+    pub dot_fast_partition: usize,
     pub size: usize,
     pub data: GenericArray<f32, Prod<R, C>>,
 }
@@ -45,6 +48,7 @@ where
         Matrix {
             shape: (R::U32 as usize, C::U32 as usize),
             size: (R::U32 as usize) * (C::U32 as usize),
+            dot_fast_partition: DOT_FAST_PARTITION,
             data: GenericArray::<f32, Prod<R, C>>::default(),
         }
     }
@@ -53,6 +57,7 @@ where
         Matrix {
             shape: (R::U32 as usize, C::U32 as usize),
             size: (R::U32 as usize) * (C::U32 as usize),
+            dot_fast_partition: DOT_FAST_PARTITION,
             data: GenericArray::<f32, Prod<R, C>>::generate(|_| n),
         }
     }
@@ -64,6 +69,7 @@ where
         Matrix {
             shape: (R::U32 as usize, C::U32 as usize),
             size: (R::U32 as usize) * (C::U32 as usize),
+            dot_fast_partition: DOT_FAST_PARTITION,
             data: GenericArray::<f32, Prod<R, C>>::generate(f),
         }
     }
@@ -472,6 +478,80 @@ where
         out
     }
 
+    pub fn dot_fast<C2>(&self, rhs: &Matrix<C, C2>) -> Matrix<R, C2>
+    where
+        R: Mul<C2> + Unsigned,
+        C: Mul<C2> + Unsigned,
+
+        C2: Mul<C> + Unsigned,
+        C2: Mul<R> + Unsigned,
+
+        Prod<R, C2>: ArrayLength<f32>,
+        Prod<C2, R>: ArrayLength<f32>,
+
+        Prod<C, C2>: ArrayLength<f32>,
+        Prod<C2, C>: ArrayLength<f32>,
+    {
+        // return self.dot(&rhs)
+        let mut out = Matrix::<R, C2>::new();
+
+        let (l_rows, l_cols) = self.shape;
+        let (_r_rows, r_cols) = rhs.shape;
+
+        let partition = self.dot_fast_partition;
+
+        if l_rows < partition {
+            return self.dot(&rhs);
+        }
+
+        if r_cols < partition {
+            return self.dot(&rhs);
+        }
+
+        // println!("fast");
+
+        for idx0 in (0..l_rows).step_by(partition) {
+            for idx1 in (0..r_cols).step_by(partition) {
+                for idx2 in (0..l_cols).step_by(partition) {
+                    let idx0_bound = if idx0 + partition < l_rows {
+                        idx0 + partition
+                    } else {
+                        l_rows
+                    };
+
+                    let idx1_bound = if idx1 + partition < r_cols {
+                        idx1 + partition
+                    } else {
+                        r_cols
+                    };
+
+                    let idx2_bound = if idx2 + partition < l_cols {
+                        idx2 + partition
+                    } else {
+                        l_cols
+                    };
+
+                    for idx0_1 in idx0..idx0_bound {
+                        for idx1_1 in idx1..idx1_bound {
+                            let mut sum = 0.0;
+
+                            for idx2_1 in idx2..idx2_bound {
+                                let l_item = self.data[idx0_1 * l_cols + idx2_1];
+                                let r_item = rhs.data[idx2_1 * r_cols + idx1_1];
+                                sum += l_item * r_item
+                            }
+
+                            let prev_sum = out.data[idx0_1 * r_cols + idx1_1];
+                            out.data[idx0_1 * r_cols + idx1_1] = prev_sum + sum;
+                        }
+                    }
+                }
+            }
+        }
+
+        out
+    }
+
     pub fn dot_out<'a, C2>(
         &self,
         rhs: &Matrix<C, C2>,
@@ -505,6 +585,83 @@ where
                 }
 
                 out.data[idx0 * r_cols + idx1] = sum;
+            }
+        }
+
+        out
+    }
+
+    pub fn dot_fast_out<'a, C2>(
+        &self,
+        rhs: &Matrix<C, C2>,
+        out: &'a mut Matrix<R, C2>,
+    ) -> &'a mut Matrix<R, C2>
+    where
+        R: Mul<C2> + Unsigned,
+        C: Mul<C2> + Unsigned,
+
+        C2: Mul<C> + Unsigned,
+        C2: Mul<R> + Unsigned,
+
+        Prod<R, C2>: ArrayLength<f32>,
+        Prod<C2, R>: ArrayLength<f32>,
+
+        Prod<C, C2>: ArrayLength<f32>,
+        Prod<C2, C>: ArrayLength<f32>,
+    {
+        // let mut out = Matrix::<R, C2>::new();
+
+        let (l_rows, l_cols) = self.shape;
+        let (_r_rows, r_cols) = rhs.shape;
+
+        let partition = self.dot_fast_partition;
+
+        if l_rows < partition {
+            return self.dot_out(&rhs, out);
+        }
+
+        if r_cols < partition {
+            return self.dot_out(&rhs, out);
+        }
+
+        // println!("fast");
+
+        for idx0 in (0..l_rows).step_by(partition) {
+            for idx1 in (0..r_cols).step_by(partition) {
+                for idx2 in (0..l_cols).step_by(partition) {
+                    let idx0_bound = if idx0 + partition < l_rows {
+                        idx0 + partition
+                    } else {
+                        l_rows
+                    };
+
+                    let idx1_bound = if idx1 + partition < r_cols {
+                        idx1 + partition
+                    } else {
+                        r_cols
+                    };
+
+                    let idx2_bound = if idx2 + partition < l_cols {
+                        idx2 + partition
+                    } else {
+                        l_cols
+                    };
+
+                    for idx0_1 in idx0..idx0_bound {
+                        for idx1_1 in idx1..idx1_bound {
+                            let mut sum = 0.0;
+
+                            for idx2_1 in idx2..idx2_bound {
+                                let l_item = self.data[idx0_1 * l_cols + idx2_1];
+                                let r_item = rhs.data[idx2_1 * r_cols + idx1_1];
+                                sum += l_item * r_item
+                            }
+
+                            let prev_sum = out.data[idx0_1 * r_cols + idx1_1];
+                            out.data[idx0_1 * r_cols + idx1_1] = prev_sum + sum;
+                        }
+                    }
+                }
             }
         }
 
